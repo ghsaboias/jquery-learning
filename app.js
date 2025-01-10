@@ -45,7 +45,10 @@ $(document).ready(function() {
                 
                 const articleElement = $(`
                     <article class="news-article">
-                        <span class="category">${article.category}</span>
+                        <div class="article-header">
+                            <span class="category">${article.category}</span>
+                            <button class="bookmark-btn" title="Bookmark this article">🔖</button>
+                        </div>
                         <h2>${article.title}</h2>
                         <div class="date">${formatDate(article.date)}</div>
                         <div class="content">
@@ -56,6 +59,19 @@ $(document).ready(function() {
                         <button class="read-more-btn">Read More</button>
                     </article>
                 `);
+
+                // Add bookmark functionality
+                const bookmarkBtn = articleElement.find('.bookmark-btn');
+                const isBookmarked = isArticleBookmarked(article);
+                if (isBookmarked) {
+                    bookmarkBtn.addClass('active');
+                }
+
+                bookmarkBtn.click(function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleBookmark(article, $(this));
+                });
                 
                 // Add reading time
                 addReadingTime(articleElement, article.content);
@@ -288,6 +304,118 @@ $(document).ready(function() {
         $('#news-container').find('.loading').remove();
     });
 
-    // Update article count on initial load
-    updateArticleCount(newsArticles.length);
+    // Theme toggle functionality
+    const themeToggle = $('#theme-toggle');
+    const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+    
+    // Set initial theme based on system preference or stored preference
+    function initializeTheme() {
+        const storedTheme = localStorage.getItem('theme');
+        if (storedTheme) {
+            document.body.classList.toggle('dark-mode', storedTheme === 'dark');
+            updateThemeToggleIcon();
+        } else if (prefersDarkScheme.matches) {
+            document.body.classList.add('dark-mode');
+            updateThemeToggleIcon();
+        }
+    }
+
+    function updateThemeToggleIcon() {
+        const isDarkMode = document.body.classList.contains('dark-mode');
+        themeToggle.text(isDarkMode ? '☀️' : '🌙');
+    }
+
+    themeToggle.click(function() {
+        document.body.classList.toggle('dark-mode');
+        const isDarkMode = document.body.classList.contains('dark-mode');
+        localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+        updateThemeToggleIcon();
+    });
+
+    // Bookmarks functionality
+    const bookmarksToggle = $('#bookmarks-toggle');
+    const bookmarksSidebar = $('#bookmarks-sidebar');
+    let bookmarks = JSON.parse(localStorage.getItem('bookmarks') || '[]');
+
+    function toggleBookmarksSidebar() {
+        bookmarksSidebar.removeClass('hidden').toggleClass('active');
+    }
+
+    function isArticleBookmarked(article) {
+        return bookmarks.some(bookmark => bookmark.title === article.title);
+    }
+
+    function toggleBookmark(article, buttonElement) {
+        const isBookmarked = isArticleBookmarked(article);
+        
+        if (isBookmarked) {
+            bookmarks = bookmarks.filter(bookmark => bookmark.title !== article.title);
+            buttonElement.removeClass('active');
+        } else {
+            bookmarks.push({
+                title: article.title,
+                date: article.date,
+                category: article.category,
+                preview: article.content.split('\n\n')[0]
+            });
+            buttonElement.addClass('active');
+        }
+        
+        localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+        updateBookmarksSidebar();
+    }
+
+    function updateBookmarksSidebar() {
+        const bookmarksList = $('#bookmarks-list');
+        bookmarksList.empty();
+        
+        if (bookmarks.length === 0) {
+            bookmarksList.append('<p>No bookmarks yet</p>');
+            return;
+        }
+        
+        bookmarks.forEach(bookmark => {
+            const bookmarkItem = $(`
+                <div class="bookmark-item">
+                    <h4>${bookmark.title}</h4>
+                    <div class="date">${formatDate(bookmark.date)}</div>
+                    <p>${bookmark.preview}</p>
+                </div>
+            `);
+            
+            bookmarkItem.click(function() {
+                const article = newsArticles.find(a => a.title === bookmark.title);
+                if (article) {
+                    bookmarksSidebar.removeClass('active');
+                    displayNews([article]);
+                    $('html, body').animate({
+                        scrollTop: 0
+                    }, 500);
+                }
+            });
+            
+            bookmarksList.append(bookmarkItem);
+        });
+    }
+
+    // Initialize bookmarks
+    bookmarksToggle.on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleBookmarksSidebar();
+    });
+
+    // Close bookmarks sidebar when clicking outside
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('#bookmarks-sidebar, #bookmarks-toggle').length && bookmarksSidebar.hasClass('active')) {
+            bookmarksSidebar.removeClass('active');
+        }
+    });
+
+    // Initialize bookmarks sidebar
+    updateBookmarksSidebar();
+
+    // Initialize features
+    initializeTheme();
+    updateBookmarksSidebar();
 }); 
