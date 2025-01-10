@@ -51,10 +51,14 @@ $(document).ready(function() {
                         <div class="content">
                             <div class="preview-content"><p>${previewContent}</p></div>
                             <div class="full-content hidden"><p>${fullContent}</p></div>
+                            <div class="scroll-progress"></div>
                         </div>
                         <button class="read-more-btn">Read More</button>
                     </article>
                 `);
+                
+                // Add reading time
+                addReadingTime(articleElement, article.content);
                 
                 // Add click handler for Read More button
                 articleElement.find('.read-more-btn').click(function() {
@@ -78,6 +82,12 @@ $(document).ready(function() {
                 container.append(articleElement);
                 articleElement.hide().fadeIn(500);
             });
+
+            // Initialize features after articles are added
+            addTextSelection();
+            updateReadingProgress();
+            addShareButtons();
+            
             container.fadeIn(300);
         });
     }
@@ -155,4 +165,129 @@ $(document).ready(function() {
     $('.news-article').dblclick(function() {
         $(this).find('.read-more-btn').click();
     });
+
+    // Add estimated reading time
+    function addReadingTime(articleElement, content) {
+        const words = content.split(' ').length;
+        const minutes = Math.ceil(words / 200);
+        const readingTime = $(`
+            <div class="reading-time">
+                <span>${minutes} min read</span>
+                <div class="progress-indicator"></div>
+            </div>
+        `);
+        articleElement.find('.date').after(readingTime);
+    }
+
+    // Add text selection sharing
+    function addTextSelection() {
+        $('.news-article').on('mouseup', function() {
+            const selection = window.getSelection();
+            if (selection.toString().length > 0) {
+                const popup = $(`
+                    <div class="selection-popup">
+                        <button class="copy-btn">Copy</button>
+                        <button class="share-btn">Share</button>
+                    </div>
+                `);
+                
+                // Remove any existing popups
+                $('.selection-popup').remove();
+                
+                // Position and show new popup
+                const range = selection.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+                popup.css({
+                    top: rect.top + window.scrollY - 40,
+                    left: rect.left + (rect.width / 2)
+                });
+                
+                // Add click handlers
+                popup.find('.copy-btn').click(function() {
+                    navigator.clipboard.writeText(selection.toString());
+                    $(this).text('Copied!');
+                    setTimeout(() => $(this).text('Copy'), 1500);
+                });
+                
+                popup.find('.share-btn').click(function() {
+                    const text = selection.toString();
+                    const shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+                    window.open(shareUrl, '_blank');
+                });
+                
+                $('body').append(popup);
+            }
+        });
+
+        // Hide popup when clicking elsewhere
+        $(document).on('mousedown', function(e) {
+            if (!$(e.target).closest('.selection-popup').length) {
+                $('.selection-popup').remove();
+            }
+        });
+    }
+
+    // Update reading progress
+    function updateReadingProgress() {
+        $('.full-content').scroll(function() {
+            const article = $(this).closest('.news-article');
+            const progress = ($(this).scrollTop() / 
+                ($(this)[0].scrollHeight - $(this).height())) * 100;
+            
+            article.find('.progress-indicator').css('width', `${progress}%`);
+        });
+    }
+
+    // Add search functionality
+    function initializeSearch() {
+        let searchTimeout;
+        
+        $('#search-input').on('input', function() {
+            clearTimeout(searchTimeout);
+            const searchTerm = $(this).val().toLowerCase();
+            
+            searchTimeout = setTimeout(() => {
+                const currentCategory = $('.category-btn.active').data('category');
+                let filteredArticles = newsArticles;
+                
+                // Filter by category if not "all"
+                if (currentCategory !== 'all') {
+                    filteredArticles = filteredArticles.filter(
+                        article => article.category === currentCategory
+                    );
+                }
+                
+                // Filter by search term
+                if (searchTerm) {
+                    filteredArticles = filteredArticles.filter(article => 
+                        article.title.toLowerCase().includes(searchTerm) ||
+                        article.content.toLowerCase().includes(searchTerm)
+                    );
+                }
+                
+                // Update search stats
+                $('.search-stats').text(
+                    `Found ${filteredArticles.length} article${filteredArticles.length !== 1 ? 's' : ''}`
+                );
+                
+                displayNews(filteredArticles);
+            }, 300);
+        });
+    }
+
+    // Initialize search functionality
+    initializeSearch();
+    
+    // Set "All News" as active by default
+    $('.category-btn[data-category="all"]').addClass('active');
+    
+    // Add loading indicator
+    $(document).ajaxStart(function() {
+        showLoading();
+    }).ajaxStop(function() {
+        $('#news-container').find('.loading').remove();
+    });
+
+    // Update article count on initial load
+    updateArticleCount(newsArticles.length);
 }); 
